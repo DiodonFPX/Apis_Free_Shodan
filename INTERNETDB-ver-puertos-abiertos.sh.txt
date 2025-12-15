@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+## Esta API se utiliza para realizar enriquecimiento básico de una IP. Devuelve información sobre puertos abiertos, etiquetas, nombres de host
+## CPE y posibles vulnerabilidades. También utiliza una herramienta complementaria llamada nrich que utiliza InternetDB para enriquecer las IP dentro
+## de un archivo
+
+cat << EOF
+
+Author: Bruno
+Coauthor:
+
+######################--+####################
+################+---++------+################
+#############+----+------------##############
+###########-++-------------------+###########
+#######++-++-----------------------##########
+#####--+++++--------------------------#######
+###++--++++++---------------------------#####
+##++++++++++-----------------------------####
+#++++++++++++-+----------------------+++--+##
+#++++#++++#####+-----------+#####+--+++++--##
+#++++++++++++++--------------+++----++#-+---#
+#++++++++++-+-----------------------+++++--+#
++#+++++++---+++-++------------------++-+++-##
++##++-+++----++-----+++-------------++---+###
++###+-+++--+++----+#####+-----------++---####
++###+-++++++----+#########+------+-------####
++##+--++++++-+-++#########+---------------###
+##+------+++--+++#########++---------------##
++----------++--+++#######+++---+-----------+#
+-+------------+++-#######++++++-----+-------+
+-----------------------+++++------+----------
+-+++++---------------------------+-----------
+-+++++-+-----------------------------++------
+
+EOF
+
+for cmd in jq curl;do
+	command -v "$cmd" >/dev/null 2>&1 || { echo >&2 "[ERROR] El paquete $cmd no esta instalado"; exit 1 ;}
+done
+
+function display_help(){
+cat << EOF
+	[USO] bash $0 [-i IP] [-f filename] [-o output_file] [-h]
+			-i = Escanea solo un objetivo
+			-f = Escanea una lista de objetivos
+			#-o = (opcional) Guarda los resultados en un archivo
+			-h = Muestra esta ayuda
+EOF
+}
+
+function ip_scan(){
+	local target="$1"
+	curl --silent --connect-timeout 5 https://internetdb.shodan.io/"$target" | jq --color-output
+}
+
+
+function scan_hosts_in_file(){
+	local filename="$1"
+
+	if ! [ -s "$1" ];then
+		echo >&2 "[ERROR] Debes proporcionar un archivo valido!"
+		exit 1
+	fi
+
+	read -rp " ¿Desear guardar los resultados del escaneo? (y/n) " respuesta
+
+	case "$respuesta" in
+		y|Y) read -rp " Nombre del archivo de salida: " filename_output
+		;;
+		n|N) echo " Resultados: "
+		;;
+		*) echo -e >&2 "\n[ERROR] Opcion -$respuesta inválida!" ; exit 1
+		;;
+	esac
+
+	while read -r ip;do
+    	curl --silent --connect-timeout 4 https://internetdb.shodan.io/"$ip" | jq --color-output
+	done < "$filename" | tee -a "$filename_output"
+
+}
+
+
+if [ "$#" -eq 0 ];then
+	display_help
+	exit 1
+fi
+
+while getopts ":hi:f:" opt;do
+	case "$opt" in
+		h) display_help
+		;;
+		i) ip_scan "$OPTARG"
+		;;
+		f) scan_hosts_in_file "$OPTARG"
+		;;
+		\?) echo >&2 "[ERROR] Opción -$OPTARG inválida."; exit 1
+		;;
+		:) echo >&2 "[ERROR] La opción -$OPTARG requiere un argumento"; exit 1
+		;;
+		*) echo >&2 "[ERROR] Error desconocido" ; exit 1
+		;;
+	esac
+done

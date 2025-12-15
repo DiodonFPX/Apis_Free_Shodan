@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+## Esta API permite explorar vulnerabilidades conocidas y proporciona una API gratuita para obtener información rápidamente.
+## La  API devuelve toda la información habitual (CVSS, referencias, resumen), así como la puntuación EPSS y si la vulnerabilidad
+## está en el catalogo CISA KEV (vulnerabilidades explotadas conocidas)
+
+
+# Verificación de dependencias (curl y jq)
+command -v curl >/dev/null 2>&1  ||  { echo >&2 "Error: 'curl' no está instalado. Abortando."; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo >&2 "Error: 'jq' no está instalado. Abortando"; exit 1;  }
+
+function banner(){
+cat << EOF
+
+Author: Bruno
+Coauthor:
+
+######################--+####################
+################+---++------+################
+#############+----+------------##############
+###########-++-------------------+###########
+#######++-++-----------------------##########
+#####--+++++--------------------------#######
+###++--++++++---------------------------#####
+##++++++++++-----------------------------####
+#++++++++++++-+----------------------+++--+##
+#++++#++++#####+-----------+#####+--+++++--##
+#++++++++++++++--------------+++----++#-+---#
+#++++++++++-+-----------------------+++++--+#
++#+++++++---+++-++------------------++-+++-##
++##++-+++----++-----+++-------------++---+###
++###+-+++--+++----+#####+-----------++---####
++###+-++++++----+#########+------+-------####
++##+--++++++-+-++#########+---------------###
+##+------+++--+++#########++---------------##
++----------++--+++#######+++---+-----------+#
+-+------------+++-#######++++++-----+-------+
+-----------------------+++++------+----------
+-+++++---------------------------+-----------
+-+++++-+-----------------------------++------
+
+EOF
+}
+
+# Funciones API shodan
+function obtener_nuevas_vulnerabilidades(){
+	curl -s https://cvedb.shodan.io/cves | jq --color-output
+}
+
+function obtener_vulnerabilidades_cve(){
+	curl -s https://cvedb.shodan.io/cve/"$OPTARG" | jq --color-output
+}
+
+function obtener_vulnerabilidades_explotadas(){
+	curl -s https://cvedb.shodan.io/cves?is_kev=true | jq --color-output
+}
+
+function obtener_por_puntuacion_epss(){
+	curl -s https://cvedb.shodan.io/cves?sort_by_epss=true | jq --color-output
+}
+
+function obtener_cpe_por_producto(){
+	curl -s https://cvedb.shodan.io/cpes?product="$OPTARG" | jq --color-output
+}
+
+function filtrar_por_fecha(){
+	local start_date=$(echo "$1" | cut -d',' -f1)
+	local end_date=$(echo "$1" | cut -d',' -f2)
+	if [[ -z "$start_date" || -z "$end_date" ]];then
+		echo >&2 "[!] Error: Formato incorrecto. Usa: AAAA-MM-DD,AAAA-MM-DD"
+		exit 1
+	fi
+	curl -s "https://cvedb.shodan.io/cves?start_date="${start_date}"&end_date="${end_date}"" | jq --color-output
+}
+
+function buscar_por_cpe23(){
+	local cpe23="$1"
+	curl -s https://cvedb.shodan.io/cves?cpe23="$cpe23" | jq --color-output
+}
+
+function buscar_por_producto(){
+	local producto="$1"
+	curl -s https://cvedb.shodan.io/cves?product="$producto" | jq --color-output
+}
+
+function mostrar_ayuda(){
+cat << EOF
+
+[!] Uso: "$0" -<opcion> [argumento]
+		-1 Conocer nuevas vulnerabilidades
+		-2 <CVE>  Acceder a detalles de una vulnerabilidad (ej: CVE-2020-0796)
+		-3 Identificar vulnerabilidades conocidad explotadas (KEV)
+		-4 Descubrir las puntuaciones EPSS más altas
+		-5 <producto> Recuperar el diccionario CPE 2.3 por producto (ej: 'macos')
+		-6 <fecha_inicio,fecha_fin>
+				Filtra por rango de fechas (formato: 'AAAA-MM-DD,AAAA-MM-DD')
+		-7 <CPE> Buscar vulnerabilidades por CPE 2.3 (ej: 'cpe:2.3:a:libpng:libpng:0.8')
+		-8 <producto> Buscar vulnerabilidades por producto (ej: 'php')'
+		-h Mostrar esta ayuda
+
+EOF
+}
+
+# Logica principal
+
+if [ "$#" -ne 1 ];then
+	banner
+	mostrar_ayuda
+fi
+
+while getopts ":12:345:6:7:8:h" opt;do
+	case "$opt" in
+		1) obtener_nuevas_vulnerabilidades;;
+		2) obtener_vulnerabilidades_cve "$OPTARG";;
+		3) obtener_vulnerabilidades_explotadas;;
+		4) obtener_por_puntuacion_epss;;
+		5) obtener_cpe_por_producto "$OPTARG";;
+		6) filtrar_por_fecha "$OPTARG";;
+		7) buscar_por_cpe23 "$OPTARG";;
+		8) buscar_por_producto "$OPTARG";;
+		h) mostrar_ayuda;;
+		\?) echo >&2 "[ERROR] Opción -$OPTARG inválida!"; exit 1;;
+		:) echo >&2 "[ERROR] La opción -$OPTARG requiere un argumento"; exit 1;;
+		*) echo >&2 "[ERROR] Errordesconocido"; exit 1;;
+	esac
+done

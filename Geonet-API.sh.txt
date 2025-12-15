@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+## Geonet permite hace ping a una IP o realizar una búsqueda de DNS desde múltiples ubicaciones alrededor del mundo.
+## Es útil para encontrar todas las IP de sitios web que realizan balanceo de carga geográfico o para detectar posibles
+## problemas de conectividad según la ubicación.
+
+# https://geonet.shodan.io/
+
+for cmd in curl jq; do
+	command -v "$cmd" >/dev/null 2>&1 || { echo >&2 "[Dependencias faltantes] Debes instalar $cmd para ejecutar este script"  ; exit 1 ; }
+done
+
+# read -rp
+
+function display_help() {
+cat << EOF
+
+[USO] [bash] $0 [-d domain] [-i ip] [-d] [-b]
+		-d = realiza ping desde diferentes ubicaciones al dominio
+		-i = realiza ping desde diferentes ubicaciones a la IP
+		-G = Descarga el comando GeoPing (requiere permisos de administrador)
+		-D = Descarga el comando GeoDNS  (requiere permisos de administrador)
+		-b = Descarga ambos comandos para que los uses en tu CLI (requiere permisos de administrador)
+
+Descripción de las herramientas disponibles:
+
+• Geoping: Mida la latencia de una IP desde múltiples ubicaciones en todo el mundo.
+Útil para pruebas de rendimiento, detección de anycast e identificación de si un servicio está inactivo a nivel global o solo en una región específica.
+
+• GeoDNS:  Consulta varios registros DNS desde diferentes ubicaciones alrededor del mundo.
+Útil para identificar si los sitios web se atienden desde diferentes ubicaciones según la ubicación del usuario final.
+
+EOF
+}
+
+function Ping_IP() {
+	local IP="$1"
+	curl --silent --connect-timeout 5 "https://geonet.shodan.io/api/geoping/"$IP"" | jq --color-output
+}
+
+function Ping_Domain() {
+	local Domain="$1"
+	curl --silent --connect-timeout 5 "https://geonet.shodan.io/api/geoping/"$Domain"" | jq --color-output
+}
+
+function Download_GeoPing() {
+
+test ! "$UID" -ne 0 || { echo >&2 "[ERROR] Debes ejecutar esta opción con permisos de administrador!" ; exit 1 ; }
+
+echo "[INSTALACIÓN EN PROCESO...]"
+
+#wget https://gitlab.com/api/v4/projects/32089582/packages/generic/geonet-rs/latest/geonet_latest_x86_64.deb
+#sudo dpkg -i geonet_latest_x86_64.deb
+
+}
+
+function Download_GeoDNS() {
+	return 1
+}
+
+function Download_both_commands() {
+
+test ! "$UID" -ne 0 || { echo >&2 "[ERROR] Debes ejecutar esta opción con permisosde administrador!" ; exit 1 ; }
+
+echo "[INSTALACIÓN EN PROCESO...]" && sleep 2
+
+	wget https://gitlab.com/api/v4/projects/32089582/packages/generic/geonet-rs/latest/geonet_latest_x86_64.deb
+	sudo dpkg -i geonet_latest_x86_64.deb
+
+}
+
+if [ "$1" == "-G" ]; then
+	Download_GeoPing
+elif [ "$1" == "-D" ]; then
+	echo "es -D"
+elif [ "$1" == "-b" ]; then
+	Download_both_commands
+else
+	:
+fi
+
+#if [ "$#" -eq 0 ] || [ "$#" -gt 2 ]; then
+#	display_help
+#	exit 1
+#fi
+
+#function 
+
+while getopts ":hd:i:GDb" opt; do
+	case "$opt" in
+		h) display_help ;;
+		d) Ping_Domain "$OPTARG" ;;
+		i) Ping_IP "$OPTARG" ;;
+		G) Download_GeoPing ;;
+		D) Download_GeoDNS ;;
+		b) Download_both_commands ;;
+	   \?) echo >&2 "[ERROR] Opción -$OPTARG desconocida!" ; exit 1 ;;
+	    :) echo >&2 "[ERROR] La opción -$OPTARG requiere un argumento!" ; exit 1 ;;
+	esac
+done
